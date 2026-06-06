@@ -1,0 +1,13 @@
+# Core Image Processing & Utilities
+numpy
+pillow
+opencv-python
+
+# Deep Learning & Models
+torch
+transformers
+ultralytics
+huggingface-hub
+
+# Optical Character Recognition
+easyocr
