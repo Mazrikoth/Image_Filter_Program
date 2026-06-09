@@ -14,19 +14,31 @@ ocr_detector = None
 hand_detector = None
 dragon_detector = None
 
-def init_worker(watermark_only, two_heads_only, two_heads):
+def init_worker(watermark_only, two_heads_only, two_heads, deformed_only, num_workers):
     """
     Runs once per worker process to initialize the detectors and configure CPU threads.
     """
     global ocr_detector, hand_detector, dragon_detector
     
-    # Restrict PyTorch thread count inside each worker to 1 to prevent thrashing/deadlocks.
-    torch.set_num_threads(1)
+    # Configure CPU threads depending on worker count
+    if num_workers == 1:
+        torch.set_num_threads(20)
+        print("Setting PyTorch thread execution count to 20 inside single worker...")
+    elif num_workers == 2:
+        torch.set_num_threads(16)
+        print("Setting PyTorch thread execution count to 16 inside each of 2 workers...")
+    else:
+        torch.set_num_threads(1)
     
     # Initialize only what is needed for the active run mode to save memory/startup time
     if two_heads_only:
         from detector_heads import DragonHeadDetector
         dragon_detector = DragonHeadDetector()
+        return
+
+    if deformed_only:
+        from detector_hands import HandAnatomyDetector
+        hand_detector = HandAnatomyDetector()
         return
 
     from detector_ocr import BorderOCRDetector
@@ -40,7 +52,7 @@ def init_worker(watermark_only, two_heads_only, two_heads):
         from detector_heads import DragonHeadDetector
         dragon_detector = DragonHeadDetector()
 
-def process_image_worker(path, watermark_only, two_heads_only, two_heads, watermark_threshold, hand_threshold, dragon_threshold):
+def process_image_worker(path, watermark_only, two_heads_only, two_heads, deformed_only, watermark_threshold, hand_threshold, dragon_threshold):
     """
     Runs model inference inside the worker process.
     """
@@ -64,7 +76,18 @@ def process_image_worker(path, watermark_only, two_heads_only, two_heads, waterm
             details_str = "CLEAN"
         return path, status, details_str, filename
 
-    # Mode 2: Standard/Watermark runs
+    # Mode 2: Severe hand deformity pass only
+    if deformed_only:
+        has_deformed, hand_details = hand_detector.detect_bad_hands(image_rgb, threshold=hand_threshold)
+        if has_deformed:
+            status = "DEFORMED"
+            details_str = f"DEFORMED ({', '.join(hand_details)})"
+        else:
+            status = "CLEAN"
+            details_str = "CLEAN"
+        return path, status, details_str, filename
+
+    # Mode 3: Standard/Watermark runs
     image_bgr = utils.rgb_to_bgr(image_rgb)
     
     # Detect watermark
@@ -110,11 +133,14 @@ def run_sorting():
     watermark_only = "--watermark-only" in sys.argv
     two_heads_only = "--two-heads-only" in sys.argv
     two_heads = "--two-heads" in sys.argv or two_heads_only
+    deformed_only = "--deformed-only" in sys.argv
     
     print("==================================================================")
     print("              STARTING IMAGE FILTER SORTING RUN                   ")
     if two_heads_only:
         print("               (DRAGON MULTI-HEAD ONLY MODE)                      ")
+    elif deformed_only:
+        print("                 (SEVERE DEFORMATION ONLY MODE)                   ")
     elif watermark_only:
         print("                   (WATERMARK ONLY MODE)                          ")
     else:
@@ -125,6 +151,8 @@ def run_sorting():
     dirs_to_create = [config.CORRUPTED_DIR]
     if two_heads_only:
         dirs_to_create.append(config.MULTI_HEAD_DIR)
+    elif deformed_only:
+        dirs_to_create.append(config.DEFORMED_DIR)
     elif watermark_only:
         dirs_to_create.append(config.WATERMARKED_DIR)
         if two_heads:
@@ -156,6 +184,8 @@ def run_sorting():
     # Cap to configured value (NUM_WORKERS) or system count to honor CPU limitations
     num_workers = min(config.NUM_WORKERS, os.cpu_count() or 1)
     print(f"Initializing parallel process pool with {num_workers} worker(s)...")
+    if num_workers == 1:
+        print("Running in SINGLE worker mode utilizing 20 CPU threads for PyTorch model execution.")
     
     processed_count = 0
     watermarked_count = 0
@@ -169,7 +199,7 @@ def run_sorting():
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=num_workers,
         initializer=init_worker,
-        initargs=(watermark_only, two_heads_only, two_heads)
+        initargs=(watermark_only, two_heads_only, two_heads, deformed_only, num_workers)
     ) as executor:
         
         # Submit all images for processing
@@ -180,6 +210,7 @@ def run_sorting():
                 watermark_only,
                 two_heads_only,
                 two_heads,
+                deformed_only,
                 config.WATERMARK_THRESHOLD,
                 config.HAND_DEFORMITY_THRESHOLD,
                 config.DRAGON_HEAD_THRESHOLD
@@ -220,11 +251,14 @@ def run_sorting():
     print("                       SORTING RUN COMPLETED                      ")
     print("==================================================================")
     print(f"Total processed: {processed_count}")
-    print(f"  - Multi-headed (moved to multi_headed/): {multi_head_count}")
-    print(f"  - Watermarked only: {watermarked_count}")
-    if not watermark_only and not two_heads_only:
-        print(f"  - Deformed hands only: {deformed_count}")
-        print(f"  - Watermarked & Deformed: {combined_count}")
+    if deformed_only:
+        print(f"  - Deformed hands (moved to deformed_hands/): {deformed_count}")
+    else:
+        print(f"  - Multi-headed (moved to multi_headed/): {multi_head_count}")
+        print(f"  - Watermarked only: {watermarked_count}")
+        if not watermark_only:
+            print(f"  - Deformed hands only: {deformed_count}")
+            print(f"  - Watermarked & Deformed: {combined_count}")
     print(f"  - Corrupt (moved to corrupted/): {corrupt_count}")
     print(f"  - Clean (remained in source): {clean_count}")
     print("==================================================================")
