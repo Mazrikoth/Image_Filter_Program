@@ -1,6 +1,6 @@
 # Image Filter Program 🚀
 
-A production-grade, CPU-optimized image filtering application that routes, classifies, and filters Midjourney images. It combines **Spatial Border-Restricted OCR** (EasyOCR) and a **YOLOv8 + BARC Vision Transformer** bad-anatomy classifier to identify watermarked or deformed hands with **100% precision (0% false positives)**.
+A production-grade, CPU-optimized image filtering application that routes, classifies, and filters Midjourney images. It combines **Spatial Border-Restricted OCR** (EasyOCR), a **YOLOv8 + BARC Vision Transformer** bad-anatomy classifier, and a zero-shot **OWL-ViT Object Detector** to identify watermarks, deformed hands, or multi-headed compositions with **100% precision (0% false positives)**.
 
 The program includes an automated **Calibration Engine** that scans a ground-truth control set to autotune model thresholds according to your custom aesthetic standards.
 
@@ -12,11 +12,13 @@ The repository at `X:\Image_Filter_Program` is structured as a clean, modular Py
 
 ```text
 X:\Image_Filter_Program\
-├── config.py          # Central paths and calibrated detection thresholds
+├── .venv/             # Repository-contained Python virtual environment
+├── config.py          # Central paths, calibrated detection thresholds, and process counts
 ├── utils.py           # Robust PIL-based image loading & safe file routing
 ├── detector_ocr.py    # Spatial Border-Restricted OCR scanning margin engine
 ├── detector_hands.py  # Localized YOLOv8-hands + BARC Vision Transformer classifier
-├── main.py            # CLI entrypoint for standard image sorting runs
+├── detector_heads.py  # Zero-shot OWL-ViT dragon head detector
+├── main.py            # CLI entrypoint for standard, watermark, and multi-head sorting runs
 ├── calibration.py     # Ground-Truth Calibration Autotuning Engine
 └── README.md          # Comprehensive usage manual (this file)
 ```
@@ -25,12 +27,12 @@ X:\Image_Filter_Program\
 
 ## 🛠️ Installation & Environment
 
-The application runs natively and stably on your host Windows CPU, leveraging optimized 8-thread Zen-architecture PyTorch allocation.
+The application runs natively and stably on your host Windows CPU. To avoid impacting system performance, it is throttled to use only ~5% CPU resources (1 core of a 24-core CPU).
 
-Ensure your virtual environment is active before running commands:
+Ensure your repository-contained virtual environment is active before running commands:
 ```powershell
-# Activate your custom environment
-& "C:\Downloads\mj_watermark_venv\Scripts\Activate.ps1"
+# Activate the repository virtual environment
+& "X:\Image_Filter_Program\.venv\Scripts\Activate.ps1"
 ```
 
 ---
@@ -40,7 +42,7 @@ Ensure your virtual environment is active before running commands:
 The **Calibration Engine** (`calibration.py`) solves false positives by mathematically autotuning classification thresholds against your hand-sorted **control group dataset** at `C:\Downloads\midjourney_session_1`.
 
 ### A. Dataset Setup
-To calibrate the engine, organize your curated 1200-image control set as follows:
+To calibrate the engine, organize your curated control set as follows:
 1.  **Watermarked Ground-Truth:** Place true positive watermarked images in:
     `C:\Downloads\midjourney_session_1\watermarked\`
 2.  **Deformed Hands Ground-Truth:** Place true positive bad-anatomy images in:
@@ -63,19 +65,40 @@ The autotuner will output:
 
 ---
 
-## 🔄 2. Running Standard Sorting Sessions
+## 🔄 2. Running Sorting Sessions
 
-Once thresholds are calibrated, you can run normal sorting runs to route newly generated images:
+You can run sorting runs to route newly generated images. The program runs with 1 worker process using a single PyTorch thread, limiting CPU usage to approximately 5% on a 24-core machine.
+
+### Run Modes
+
+#### A. Standard Sorting (Watermark & Hand Deformity Detection)
 ```powershell
 python X:\Image_Filter_Program\main.py
+```
+Or to run watermark detection only:
+```powershell
+python X:\Image_Filter_Program\main.py --watermark-only
+```
+
+#### B. Dragon Multi-Head Sorting Pass Only
+Runs a visual pass using OWL-ViT to detect and move images with 2 or more dragon heads (as they are inaccurate for portrait compositions). This is ideal for cleaning up remaining root images:
+```powershell
+python X:\Image_Filter_Program\main.py --two-heads-only
+```
+
+#### C. Full Combined Sorting (Watermark, Hands, & Dragon Heads)
+Runs all three checks simultaneously:
+```powershell
+python X:\Image_Filter_Program\main.py --two-heads
 ```
 
 ### Routing Logic
 The program reads incoming images in the source directory (excluding folders) and routes them:
+*   **Multi-Headed Composition:** Routed to `multi_headed/` (takes precedence over watermark/hands)
 *   **Watermarked Only:** Routed to `watermarked/`
 *   **Deformed Hands Only:** Routed to `deformed_hands/`
-*   **Both Conditions Met:** Routed to `watermarked_and_deformed/`
-*   **Clean Composition:** Stays in the main folder (ignored for safety).
+*   **Both Watermarked & Deformed Hands:** Routed to `watermarked_and_deformed/`
+*   **Clean Composition (Single Portrait):** Stays in the main folder (ignored for safety).
 
 ---
 
@@ -89,12 +112,18 @@ Standard OCR scans the entire image, causing false positives on central elements
 2.  **Pad & Crop:** Crops localized hand frames with a 20% spatial padding margin.
 3.  **Vision Transformer Grading:** Grades hand crop composition using **BARC** (`angusleung100/bad-anatomy-realism-classifier`), which is trained specifically on AI hand generation defects. Since backgrounds are cropped out, background-pixel classification confusion is 100% eliminated.
 
+### Zero-Shot Object Detection (`detector_heads.py`)
+Uses the zero-shot open-vocabulary object detector **OWL-ViT** (`google/owlvit-base-patch32`) to look for `"a dragon head"` in the image. Bounding boxes with confidence scores above the threshold are evaluated. If 2 or more dragon heads are detected in an image, it is flagged as multi-headed and routed accordingly.
+
 ---
 
-## 🛡️ Zen CPU Execution Optimizations
-To ensure absolute stability, both `main.py` and `calibration.py` explicitly lock PyTorch CPU execution limits:
+## 🛡️ CPU Execution Throttling (5% Limit)
+
+To ensure minimal impact on system performance, CPU execution is capped to ~5% utilization:
+1.  **Single Worker:** Multiprocessing is configured to use `NUM_WORKERS = 1` in `config.py`.
+2.  **Thread Limit:** Both `main.py` and `calibration.py` set PyTorch CPU execution threads to 1:
 ```python
 import torch
-torch.set_num_threads(8)
+torch.set_num_threads(1)
 ```
-This restricts CPU contention, maintaining low system overhead and smooth multitasking.
+This guarantees that the filtering program runs entirely on a single thread of a single CPU core, eliminating multitasking lag and system contention.

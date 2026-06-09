@@ -10,7 +10,7 @@ from detector_ocr import BorderOCRDetector
 from detector_hands import HandAnatomyDetector
 
 # Optimize PyTorch CPU execution
-torch.set_num_threads(8)
+torch.set_num_threads(1)
 
 
 def calibrate():
