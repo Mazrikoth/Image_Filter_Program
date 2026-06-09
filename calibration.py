@@ -209,6 +209,7 @@ SOURCE_DIR = r"{config.SOURCE_DIR}"
 WATERMARKED_DIR = os.path.join(SOURCE_DIR, "watermarked")
 DEFORMED_DIR = os.path.join(SOURCE_DIR, "deformed_hands")
 COMBINED_DIR = os.path.join(SOURCE_DIR, "watermarked_and_deformed")
+CORRUPTED_DIR = os.path.join(SOURCE_DIR, "corrupted")
 
 # Central Detection Thresholds (Autotuned by calibration.py)
 WATERMARK_THRESHOLD = {opt_watermark_t:.2f}             # Calibrated OCR text probability
