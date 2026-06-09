@@ -15,4 +15,4 @@ WHOLE_IMAGE_DEFORMED_THRESHOLD = 0.45  # Standard fallback
 DRAGON_HEAD_THRESHOLD = 0.15           # Confidence threshold for OWL-ViT dragon head detection
 
 # Multiprocessing limits
-NUM_WORKERS = 1  # Cap to 1 worker process (~5% CPU on 24-core system) to honor user request
+NUM_WORKERS = 20  # Use 20 concurrent workers single-threaded as requested by the user
