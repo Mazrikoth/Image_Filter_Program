@@ -12,7 +12,7 @@ def test_owlvit():
     model.eval()
     
     # Get a few test images from the source folder containing "dragon"
-    source_dir = r"C:\Downloads\midjourney_session_1"
+    source_dir = config.SOURCE_DIR
     image_paths = glob.glob(os.path.join(source_dir, "*dragon*"))[:50]
     
     if not image_paths:

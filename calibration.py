@@ -210,11 +210,16 @@ WATERMARKED_DIR = os.path.join(SOURCE_DIR, "watermarked")
 DEFORMED_DIR = os.path.join(SOURCE_DIR, "deformed_hands")
 COMBINED_DIR = os.path.join(SOURCE_DIR, "watermarked_and_deformed")
 CORRUPTED_DIR = os.path.join(SOURCE_DIR, "corrupted")
+MULTI_HEAD_DIR = os.path.join(SOURCE_DIR, "multi_headed")
 
 # Central Detection Thresholds (Autotuned by calibration.py)
 WATERMARK_THRESHOLD = {opt_watermark_t:.2f}             # Calibrated OCR text probability
 HAND_DEFORMITY_THRESHOLD = {opt_hand_t:.2f}        # Calibrated BARC bad-anatomy crop probability
 WHOLE_IMAGE_DEFORMED_THRESHOLD = 0.45  # Standard fallback
+DRAGON_HEAD_THRESHOLD = {config.DRAGON_HEAD_THRESHOLD:.2f}           # Confidence threshold for OWL-ViT dragon head detection
+
+# Multiprocessing limits
+NUM_WORKERS = {config.NUM_WORKERS}  # Spawn parallel worker processes (safe RAM usage)
 """
         with open(config_path, "w") as f:
             f.write(content)
