@@ -104,7 +104,7 @@ def calibrate():
                     probs = outputs.logits.softmax(dim=1)
                     bad_prob = 0.0
                     for label_idx, label_name in hand_detector.id2label.items():
-                        if "Bad Anatomy" in label_name:
+                        if "Bad_Anatomy" in label_name:
                             bad_prob += probs[0][label_idx].item()
                     if bad_prob > hand_max:
                         hand_max = bad_prob

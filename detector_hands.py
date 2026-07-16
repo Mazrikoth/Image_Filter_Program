@@ -70,7 +70,7 @@ class HandAnatomyDetector:
                 for label_idx, label_name in self.id2label.items():
                     prob = probs[0][label_idx].item()
                     class_details.append(f"{label_name}: {prob*100:.1f}%")
-                    if "Bad Anatomy" in label_name:
+                    if "Bad_Anatomy" in label_name:
                         bad_prob += prob
                 
                 if bad_prob >= threshold:
